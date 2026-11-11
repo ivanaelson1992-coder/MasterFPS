@@ -57,8 +57,9 @@ run_install() {
   local disk
   read -r -p "Digite o nome do disco (ex.: sda, nvme0n1): " disk
   disk="${disk#/dev/}"
-  if [[ ! -b "/dev/$disk" || "$disk" == loop* || "$disk" == sr* || "$disk" == zram* ]]; then
-    warn "Disco '/dev/$disk' inválido."; press_enter; return
+  if [[ ! -b "/dev/$disk" || ! -d "/sys/block/$disk" || "$disk" == loop* || "$disk" == sr* || "$disk" == zram* ]]; then
+    warn "Disco '/dev/$disk' inválido (precisa ser o disco inteiro, ex.: sda, nvme0n1)."
+    press_enter; return
   fi
 
   local uefi=0
@@ -125,7 +126,7 @@ run_install() {
   if ! pacstrap -K /mnt base linux-ogc linux-ogc-headers linux-firmware grub efibootmgr sudo; then
     abort "Falha ao instalar os pacotes base (rede ou repositório)."; return
   fi
-  genfstab -U /mnt >> /mnt/etc/fstab
+  genfstab -U /mnt > /mnt/etc/fstab
 
   say "Configurando idioma, fuso, usuário e bootloader..."
   cat > /mnt/root/.mf-setup.sh <<'EOF'
