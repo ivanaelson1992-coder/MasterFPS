@@ -27,6 +27,9 @@ printf '\n[ogc]\nServer = https://pacman.opengamingcollective.org\n' >> $P/pacma
 sed -i '/^linux$/d;/^linux-headers$/d' $P/packages.x86_64
 printf 'linux-ogc\nlinux-ogc-headers\nlinux-firmware\n' >> $P/packages.x86_64
 
+# Sessão gráfica live: Plasma + SDDM + Konsole (instalador na área de trabalho)
+printf '%s\n' xorg-server sddm plasma-desktop konsole noto-fonts ttf-liberation >> $P/packages.x86_64
+
 # Bootloaders apontam para o kernel OGC
 grep -rlE 'vmlinuz-linux|initramfs-linux' $P/grub $P/syslinux $P/efiboot 2>/dev/null | while read -r f; do
   sed -i 's/vmlinuz-linux\b/vmlinuz-linux-ogc/g; s/initramfs-linux\.img/initramfs-linux-ogc.img/g' "$f"

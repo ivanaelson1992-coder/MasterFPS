@@ -22,3 +22,43 @@ if [[ $(tty 2>/dev/null) == /dev/tty1 && ! -e /run/masterfps-installer-ran && -x
   /usr/local/bin/masterfps-install
 fi
 ZEOF
+
+# ================= SESSÃO LIVE GRÁFICA: Plasma com login automático + instalador
+useradd -m -s /bin/bash masterfps 2>/dev/null || true
+echo 'masterfps ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/99-masterfps-live
+chmod 440 /etc/sudoers.d/99-masterfps-live
+
+mkdir -p /etc/sddm.conf.d
+cat > /etc/sddm.conf.d/autologin.conf <<'EOF'
+[Autologin]
+User=masterfps
+Session=plasma
+Relogin=false
+EOF
+
+systemctl enable sddm
+systemctl mask getty@tty1
+
+# O instalador abre sozinho na área de trabalho; há também um ícone no Desktop
+mkdir -p /etc/xdg/autostart /home/masterfps/Desktop
+cat > /etc/xdg/autostart/masterfps-install.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Instalar o MasterFPSOS
+Exec=konsole -e sudo /usr/local/bin/masterfps-install
+Icon=system-installer
+Terminal=false
+EOF
+cat > /home/masterfps/Desktop/Instalar-MasterFPSOS.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Instalar o MasterFPSOS
+Name[pt_BR]=Instalar o MasterFPSOS
+Comment[pt_BR]=Instala o MasterFPSOS no computador
+Exec=konsole -e sudo /usr/local/bin/masterfps-install
+Icon=system-installer
+Terminal=false
+Categories=System;
+EOF
+chmod +x /home/masterfps/Desktop/Instalar-MasterFPSOS.desktop
+chown -R masterfps:masterfps /home/masterfps/Desktop
