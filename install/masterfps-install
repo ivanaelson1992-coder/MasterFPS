@@ -102,17 +102,15 @@ run_install() {
     sgdisk -n1:0:+1M -t1:ef02 "/dev/$disk" >/dev/null
     sgdisk -n2:0:0   -t2:8300 "/dev/$disk" >/dev/null
   fi
+  local p=""
+  [[ $disk == nvme* || $disk == mmcblk* ]] && p="p"
   partprobe "/dev/$disk" >/dev/null 2>&1 || true
-  sleep 1
+  for _ in 1 2 3 4 5; do [[ -b "/dev/${disk}${p}2" ]] && break; sleep 1; done
 
-  local parts=()
-  mapfile -t parts < <(lsblk -n -o NAME "/dev/$disk" | sed 1d)
-  if [[ ${#parts[@]} -lt 2 ]]; then
-    abort "Não encontrei as partições criadas."; return
-  fi
-  local rootpart="/dev/${parts[1]}"
+  local rootpart="/dev/${disk}${p}2"
   local esp=""
-  [[ $uefi -eq 1 ]] && esp="/dev/${parts[0]}"
+  [[ $uefi -eq 1 ]] && esp="/dev/${disk}${p}1"
+  [[ -b $rootpart ]] || { abort "Não encontrei $rootpart (particionamento falhou?)."; return; }
 
   say "Formatando as partições..."
   [[ $uefi -eq 1 ]] && mkfs.fat -F32 -n EFIBOOT "$esp" >/dev/null
