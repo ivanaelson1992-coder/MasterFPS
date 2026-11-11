@@ -49,6 +49,14 @@ rm -f $P/airootfs/etc/mkinitcpio.d/linux.preset
 cp -r overlay/airootfs/. $P/airootfs/
 cp customize_airootfs.sh $P/airootfs/root/customize_airootfs.sh
 chmod +x $P/airootfs/root/customize_airootfs.sh
+
+# Shell do root na live = bash (para o instalador abrir sozinho no login)
+sed -i 's|/usr/bin/zsh$|/bin/bash|' $P/airootfs/etc/passwd
+
+# Instalador automático da ISO
+cp install/masterfps-install $P/airootfs/usr/local/bin/masterfps-install
+chmod +x $P/airootfs/usr/local/bin/masterfps-install
+
 cp postinstall/masterfps-postinstall $P/airootfs/usr/local/bin/masterfps-postinstall
 chmod +x $P/airootfs/usr/local/bin/masterfps-postinstall
 

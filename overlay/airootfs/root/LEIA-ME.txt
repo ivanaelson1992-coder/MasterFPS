@@ -1,11 +1,11 @@
 MasterFPSOS — Arch + kernel OGC 7.x — KDE Plasma — pt-BR
 =============================================================================
-INSTALAR
-  archinstall            (use GRUB ou systemd-boot; perfil mínimo)
-  No fim, escolha "chroot" e rode:
+INSTALAR (recomendado)
+  masterfps-install      (abre sozinho no boot; guia: disco, usuário, senha)
+  Modo avançado: archinstall  (perfil mínimo; no fim escolha "chroot", rode:
     cp /usr/local/bin/masterfps-postinstall /mnt/usr/local/bin/
-    arch-chroot /mnt masterfps-postinstall
-  Reinicie.
+    arch-chroot /mnt masterfps-postinstall)
+  Reinicie sem a ISO.
 
 DEPOIS DE INSTALADO
   .exe / .msi ........ dois cliques, ou:  masterfps-run jogo.exe
