@@ -27,3 +27,21 @@ jobs:
           name: MasterFPSOS-ISO
           path: out/*.iso
           if-no-files-found: error
+
+      - name: Enviar a ISO para o Pixeldrain (download mais rapido)
+        run: |
+          ISO=$(ls out/*.iso)
+          RESP=$(curl -fsS -T "$ISO" "https://pixeldrain.com/api/file/$(basename "$ISO")")
+          echo "Resposta: $RESP"
+          ID=$(echo "$RESP" | jq -r .id)
+          {
+            echo "Link: https://pixeldrain.com/u/$ID"
+            echo "Download direto: https://pixeldrain.com/api/file/$ID"
+          } | tee pixeldrain-link.txt
+
+      - name: Publicar o link do Pixeldrain
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixeldrain-link
+          path: pixeldrain-link.txt
+          if-no-files-found: error
