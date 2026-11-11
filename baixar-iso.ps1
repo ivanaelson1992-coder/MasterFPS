@@ -47,9 +47,9 @@ if ($Repo -notmatch '^[^/]+/[^/]+$') { Fail "Repositorio invalido: $Repo (use o 
 
 Write-Host "Repositorio: $Repo"
 
-$repoInfo = Invoke-Gh @('api', "repos/$Repo", '--jq', '.size')
+$repoInfo = Invoke-Gh @('repo', 'view', $Repo, '--json', 'isEmpty', '-q', '.isEmpty')
 if ($repoInfo.ExitCode -ne 0) { Fail "Repositorio nao encontrado ou sem acesso: $Repo" }
-if ((($repoInfo.Output | Out-String).Trim()) -eq '0') {
+if ((($repoInfo.Output | Out-String).Trim()) -eq 'true') {
     Fail "O repositorio $Repo esta vazio. Envie o projeto e rode o workflow antes de baixar a ISO."
 }
 
@@ -60,11 +60,18 @@ if ($listed.ExitCode -ne 0) {
     Fail "Nao foi possivel consultar as execucoes. Confira o repositorio e seu acesso."
 }
 
-$runs = @()
+$run = $null
 $runsJson = ($listed.Output | Out-String).Trim()
-if ($runsJson) { $runs = @($runsJson | ConvertFrom-Json) }
+if ($runsJson) {
+    $parsed = $runsJson | ConvertFrom-Json
+    if ($parsed -is [System.Array]) {
+        if ($parsed.Count -gt 0) { $run = $parsed[0] }
+    } elseif ($null -ne $parsed) {
+        $run = $parsed
+    }
+}
 
-if ($runs.Count -eq 0) {
+if ($null -eq $run) {
     Write-Host "Nenhuma execucao bem-sucedida de '$Workflow' encontrada." -ForegroundColor Yellow
     Write-Host "Ultimas execucoes:"
     $recent = Invoke-Gh @('run', 'list', '--repo', $Repo, '--workflow', $Workflow, '--limit', '5')
@@ -72,7 +79,6 @@ if ($runs.Count -eq 0) {
     exit 1
 }
 
-$run = $runs[0]
 Write-Host ("Execucao: #{0} '{1}' ({2}, branch {3})" -f $run.databaseId, $run.displayTitle, $run.createdAt, $run.headBranch)
 
 $stage = Join-Path ([System.IO.Path]::GetTempPath()) ("masterfps-iso-" + [guid]::NewGuid().ToString('N'))

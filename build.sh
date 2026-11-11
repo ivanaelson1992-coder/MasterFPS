@@ -47,6 +47,8 @@ sed -i 's|^file_permissions=(|file_permissions=(\n  ["/usr/local/bin/masterfps-p
 # Arquivos do MasterFPS dentro da ISO
 rm -f $P/airootfs/etc/mkinitcpio.d/linux.preset
 cp -r overlay/airootfs/. $P/airootfs/
+cp customize_airootfs.sh $P/airootfs/root/customize_airootfs.sh
+chmod +x $P/airootfs/root/customize_airootfs.sh
 cp postinstall/masterfps-postinstall $P/airootfs/usr/local/bin/masterfps-postinstall
 chmod +x $P/airootfs/usr/local/bin/masterfps-postinstall
 
