@@ -42,7 +42,8 @@ sed -i 's/^iso_name=.*/iso_name="masterfpsos"/' $P/profiledef.sh
 sed -i 's/^iso_label=.*/iso_label="MASTERFPSOS_$(date +%Y%m)"/' $P/profiledef.sh
 sed -i 's/^iso_publisher=.*/iso_publisher="MasterFPSOS"/' $P/profiledef.sh
 sed -i 's/^iso_application=.*/iso_application="MasterFPSOS - Gaming Linux"/' $P/profiledef.sh
-sed -i 's|^file_permissions=(|file_permissions=(\n  ["/usr/local/bin/masterfps-postinstall"]="0:0:755"|' $P/profiledef.sh
+# mkarchiso normaliza as permissões do airootfs: executáveis precisam estar em file_permissions
+sed -i 's|^file_permissions=(|file_permissions=(\n  ["/usr/local/bin/masterfps-install"]="0:0:755" ["/usr/local/bin/masterfps-postinstall"]="0:0:755"|' $P/profiledef.sh
 
 # Arquivos do MasterFPS dentro da ISO
 rm -f $P/airootfs/etc/mkinitcpio.d/linux.preset
