@@ -1,0 +1,9 @@
+
+  MasterFPSOS  (Arch + kernel OGC 7.x)
+
+  1) archinstall   (GRUB ou systemd-boot)
+  2) No fim escolha "chroot" e rode:
+       cp /usr/local/bin/masterfps-postinstall /mnt/usr/local/bin/
+       arch-chroot /mnt masterfps-postinstall
+  3) Reinicie.  Mais detalhes: /root/LEIA-ME.txt
+

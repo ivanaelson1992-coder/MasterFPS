@@ -1,0 +1,6 @@
+# mkinitcpio preset do MasterFPS (kernel OGC) para a ISO live
+PRESETS=('archiso')
+
+ALL_kver='/boot/vmlinuz-linux-ogc'
+archiso_config='/etc/mkinitcpio.conf.d/archiso.conf'
+archiso_image="/boot/initramfs-linux-ogc.img"

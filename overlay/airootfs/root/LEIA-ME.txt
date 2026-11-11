@@ -1,0 +1,17 @@
+MasterFPSOS — Arch + kernel OGC 7.x — KDE Plasma — pt-BR
+=============================================================================
+INSTALAR
+  archinstall            (use GRUB ou systemd-boot; perfil mínimo)
+  No fim, escolha "chroot" e rode:
+    cp /usr/local/bin/masterfps-postinstall /mnt/usr/local/bin/
+    arch-chroot /mnt masterfps-postinstall
+  Reinicie.
+
+DEPOIS DE INSTALADO
+  .exe / .msi ........ dois cliques, ou:  masterfps-run jogo.exe
+                       (usa Proton-GE via umu; baixa na 1ª execução, precisa de internet)
+  HUD de FPS ......... MASTERFPS_HUD=1 masterfps-run jogo.exe
+  Modo Gamer ......... sudo masterfps-boost on | off | status   (ligado por padrão no boot)
+  Apps extras ........ masterfps-apps   (Bottles, ProtonUp-Qt, Heroic)
+  Steam .............. Opções de inicialização:  gamemoderun mangohud %command%
+                       Configurações > Compatibilidade > Proton para todos os jogos

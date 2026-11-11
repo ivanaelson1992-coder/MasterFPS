@@ -1,0 +1,960 @@
+#!/usr/bin/env bash
+# MasterFPSOS - pós-instalação COMPLETA (Arch + kernel OGC 7.x)
+# Kernel OGC, desktop KDE Plasma com visual MasterFPSOS, tudo em pt-BR,
+# jogos, .exe (Proton-GE/Wine), modo gamer, otimização de CPU e GPU.
+# Rode como root dentro do sistema instalado:  arch-chroot /mnt masterfps-postinstall
+set -uo pipefail
+[[ $EUID -eq 0 ]] || { echo "Use o usuário root."; exit 1; }
+
+KEY=F79100EF8C802DAB81C323BB8EEA5962FE510E19
+ASC=https://raw.githubusercontent.com/OpenGamingCollective/ogc-arch-packaging/main/ogc.asc
+say()  { echo -e "\033[1;32m[MasterFPS]\033[0m $*"; }
+warn() { echo -e "\033[1;33m[AVISO]\033[0m $*"; }
+pac()  { pacman -S --noconfirm --needed "$@"; }
+try()  { pac "$@" || warn "Falhou: $*"; }
+
+# ============================================================ REPOSITÓRIOS
+say "Configurando repositórios (multilib + ogc)..."
+sed -i '/^#\[multilib\]/{s/^#//;n;s/^#//}' /etc/pacman.conf
+grep -q '^\[ogc\]' /etc/pacman.conf || \
+  printf '\n[ogc]\nServer = https://pacman.opengamingcollective.org\n' >> /etc/pacman.conf
+sed -i 's/^#ParallelDownloads.*/ParallelDownloads = 8/' /etc/pacman.conf
+pacman-key --init
+pacman-key --populate archlinux
+pacman-key --recv-keys "$KEY" 2>/dev/null || curl -fsSL "$ASC" | pacman-key --add -
+pacman-key --lsign-key "$KEY"
+pacman -Syu --noconfirm
+
+# ================================================================ PT-BR
+say "Configurando idioma, teclado e fuso horário (pt-BR)..."
+sed -i 's/^#\(pt_BR.UTF-8 UTF-8\)/\1/' /etc/locale.gen
+grep -q '^pt_BR.UTF-8' /etc/locale.gen || echo 'pt_BR.UTF-8 UTF-8' >> /etc/locale.gen
+locale-gen
+echo 'LANG=pt_BR.UTF-8' > /etc/locale.conf
+echo 'KEYMAP=br-abnt2' > /etc/vconsole.conf
+[[ -e /etc/localtime ]] || ln -sf /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime
+hwclock --systohc 2>/dev/null
+mkdir -p /etc/X11/xorg.conf.d
+cat > /etc/X11/xorg.conf.d/00-keyboard.conf <<'EOF'
+Section "InputClass"
+    Identifier "teclado-br"
+    MatchIsKeyboard "on"
+    Option "XkbModel" "abnt2"
+    Option "XkbLayout" "br"
+EndSection
+EOF
+cat > /etc/xdg/kxkbrc <<'EOF'
+[Layout]
+LayoutList=br
+Model=abnt2
+Use=true
+EOF
+
+# ================================================================ KERNEL
+say "Instalando o kernel OGC 7.x..."
+try linux-ogc linux-ogc-headers linux-firmware pciutils
+if grep -qi GenuineIntel /proc/cpuinfo; then try intel-ucode
+elif grep -qi AuthenticAMD /proc/cpuinfo; then try amd-ucode; fi
+
+# ======================================================= DRIVER DE VÍDEO
+GPU=$(lspci 2>/dev/null | grep -Ei 'vga|3d' || true)
+say "Placa de vídeo: ${GPU:-não detectada}"
+GPU_KIND=intel
+if echo "$GPU" | grep -qi nvidia; then
+  GPU_KIND=nvidia
+  try nvidia-open-dkms nvidia-utils lib32-nvidia-utils nvidia-settings
+  warn "NVIDIA: se o DKMS falhar no kernel 7.x, inicie pelo kernel 'linux' (reserva)."
+elif echo "$GPU" | grep -Eqi 'amd|ati|radeon'; then
+  GPU_KIND=amd
+  try mesa lib32-mesa vulkan-radeon lib32-vulkan-radeon libva-mesa-driver lib32-libva-mesa-driver
+else
+  try mesa lib32-mesa vulkan-intel lib32-vulkan-intel intel-media-driver
+fi
+
+# ======================================= DESKTOP: KDE PLASMA + ÁUDIO + REDE
+say "Instalando o desktop KDE Plasma (visual MasterFPSOS)..."
+try xorg-server plasma-desktop plasma-nm plasma-pa plasma-systemmonitor kscreen \
+    powerdevil sddm sddm-kcm kde-gtk-config breeze-gtk xdg-desktop-portal-kde \
+    qt6-wayland konsole dolphin ark gwenview spectacle kate \
+    networkmanager firefox firefox-i18n-pt-br hunspell-pt-br man-pages-pt_br \
+    pipewire pipewire-pulse pipewire-alsa lib32-pipewire wireplumber \
+    papirus-icon-theme inter-font librsvg qt6-svg noto-fonts noto-fonts-emoji ttf-liberation \
+    xdg-utils shared-mime-info git base-devel htop flatpak sudo earlyoom zram-generator
+
+# ============================================== JOGOS + WINDOWS (.exe)
+say "Instalando Steam, Wine-Staging, Proton (umu), GameMode, MangoHud, Gamescope..."
+try steam lutris gamemode lib32-gamemode mangohud lib32-mangohud vulkan-tools \
+    wine-staging wine-mono wine-gecko winetricks vkd3d lib32-vkd3d \
+    lib32-gnutls lib32-libpulse lib32-alsa-plugins lib32-openal lib32-sdl2 \
+    lib32-libxcomposite lib32-libxinerama lib32-giflib lib32-v4l-utils
+try umu-launcher
+try gamescope-ogc gamescope-session-steam
+try scx-scheds
+
+# ================================================== VISUAL "MASTERFPS HARMONY"
+say "Aplicando o visual MasterFPSOS (claro, limpo, cantos arredondados, dock central)..."
+mkdir -p /usr/share/color-schemes
+cat > /usr/share/color-schemes/MasterFPSHarmony.colors <<'EOF'
+[General]
+ColorScheme=MasterFPSHarmony
+Name=MasterFPSOS
+shadeSortColumn=true
+
+[KDE]
+contrast=4
+
+[Colors:Window]
+BackgroundNormal=241,243,245
+BackgroundAlternate=232,235,239
+ForegroundNormal=24,36,49
+ForegroundInactive=102,112,124
+ForegroundActive=10,89,247
+ForegroundLink=10,89,247
+ForegroundVisited=122,87,209
+ForegroundNegative=230,46,53
+ForegroundNeutral=255,152,0
+ForegroundPositive=0,168,112
+DecorationFocus=10,89,247
+DecorationHover=10,89,247
+
+[Colors:View]
+BackgroundNormal=255,255,255
+BackgroundAlternate=247,248,250
+ForegroundNormal=24,36,49
+ForegroundInactive=102,112,124
+ForegroundActive=10,89,247
+ForegroundLink=10,89,247
+ForegroundVisited=122,87,209
+ForegroundNegative=230,46,53
+ForegroundNeutral=255,152,0
+ForegroundPositive=0,168,112
+DecorationFocus=10,89,247
+DecorationHover=10,89,247
+
+[Colors:Button]
+BackgroundNormal=255,255,255
+BackgroundAlternate=241,243,245
+ForegroundNormal=24,36,49
+ForegroundInactive=102,112,124
+ForegroundActive=10,89,247
+ForegroundLink=10,89,247
+ForegroundVisited=122,87,209
+ForegroundNegative=230,46,53
+ForegroundNeutral=255,152,0
+ForegroundPositive=0,168,112
+DecorationFocus=10,89,247
+DecorationHover=10,89,247
+
+[Colors:Selection]
+BackgroundNormal=10,89,247
+BackgroundAlternate=8,72,200
+ForegroundNormal=255,255,255
+ForegroundInactive=214,226,255
+ForegroundActive=255,255,255
+ForegroundLink=255,255,255
+ForegroundVisited=230,220,255
+ForegroundNegative=255,200,200
+ForegroundNeutral=255,230,180
+ForegroundPositive=190,255,225
+DecorationFocus=10,89,247
+DecorationHover=10,89,247
+
+[Colors:Tooltip]
+BackgroundNormal=24,36,49
+BackgroundAlternate=40,54,70
+ForegroundNormal=255,255,255
+ForegroundInactive=190,198,208
+ForegroundActive=120,170,255
+ForegroundLink=120,170,255
+ForegroundVisited=190,170,255
+ForegroundNegative=255,120,120
+ForegroundNeutral=255,200,120
+ForegroundPositive=120,230,190
+DecorationFocus=10,89,247
+DecorationHover=10,89,247
+
+[Colors:Complementary]
+BackgroundNormal=34,42,54
+BackgroundAlternate=44,54,68
+ForegroundNormal=240,243,247
+ForegroundInactive=160,170,182
+ForegroundActive=120,170,255
+ForegroundLink=120,170,255
+ForegroundVisited=190,170,255
+ForegroundNegative=255,120,120
+ForegroundNeutral=255,200,120
+ForegroundPositive=120,230,190
+DecorationFocus=10,89,247
+DecorationHover=10,89,247
+
+[WM]
+activeBackground=241,243,245
+activeForeground=24,36,49
+inactiveBackground=241,243,245
+inactiveForeground=102,112,124
+EOF
+
+# Papel de parede: fênix + "MasterFPS" (arte vetorial original, texto já em curvas)
+W=/usr/share/wallpapers/MasterFPSFenix
+mkdir -p $W/contents/images /usr/share/masterfps
+cat > $W/metadata.json <<'EOF'
+{
+  "KPlugin": { "Id": "MasterFPSFenix", "Name": "MasterFPS - Fênix", "License": "GPL-3.0" },
+  "KPackageStructure": "Wallpaper/Images"
+}
+EOF
+base64 -d <<'EOF' | gunzip > /usr/share/masterfps/fenix.svg
+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
+2l5smC/U//zr++//BwnHBZmUuAAA
+EOF
+cp /usr/share/masterfps/fenix.svg $W/contents/images/1920x1080.svg
+
+# Pacote "Look and Feel" (aplica tema, ícones, fonte, papel de parede e painel/dock)
+L=/usr/share/plasma/look-and-feel/org.masterfps.harmony
+mkdir -p $L/contents/layouts
+cat > $L/metadata.json <<'EOF'
+{
+  "KPlugin": {
+    "Id": "org.masterfps.harmony",
+    "Name": "MasterFPSOS",
+    "Description": "Visual claro e limpo, inspirado em interfaces modernas, com dock central",
+    "Authors": [ { "Name": "MasterFPS" } ],
+    "License": "GPL-3.0",
+    "Version": "1.0"
+  },
+  "KPackageStructure": "Plasma/LookAndFeel",
+  "X-Plasma-APIVersion": "2"
+}
+EOF
+cat > $L/contents/defaults <<'EOF'
+[kdeglobals][General]
+ColorScheme=MasterFPSHarmony
+
+[kdeglobals][Icons]
+Theme=Papirus
+
+[kdeglobals][KDE]
+widgetStyle=Breeze
+
+[kwinrc][org.kde.kdecoration2]
+library=org.kde.breeze
+theme=Breeze
+
+[Wallpaper]
+image=MasterFPSFenix
+EOF
+cat > $L/contents/layouts/org.kde.plasma.desktop-layout.js <<'EOF'
+var plasma = getApiVersion(1);
+
+var layout = {
+    "desktops": [
+        {
+            "applets": [],
+            "config": { "/": { "formfactor": "0", "immutability": "1" } },
+            "wallpaperPlugin": "org.kde.image"
+        }
+    ],
+    "panels": [
+        {
+            "alignment": "center",
+            "applets": [
+                { "config": {}, "plugin": "org.kde.plasma.kickoff" },
+                {
+                    "config": { "General": { "launchers": "applications:steam.desktop,applications:firefox.desktop,applications:org.kde.dolphin.desktop,applications:org.kde.konsole.desktop,applications:systemsettings.desktop" } },
+                    "plugin": "org.kde.plasma.icontasks"
+                },
+                { "config": {}, "plugin": "org.kde.plasma.marginsseparator" },
+                { "config": {}, "plugin": "org.kde.plasma.systemtray" },
+                { "config": {}, "plugin": "org.kde.plasma.digitalclock" }
+            ],
+            "config": { "/": { "formfactor": "2", "immutability": "1" } },
+            "height": 4,
+            "hiding": "none",
+            "location": "bottom",
+            "maximumLength": 1400,
+            "minimumLength": 800,
+            "offset": 0
+        }
+    ],
+    "serializationFormatVersion": "1"
+};
+
+plasma.loadSerializedLayout(layout);
+EOF
+
+# Padrões do sistema: tema, ícones, fonte Inter, compositor com baixa latência
+cat > /etc/xdg/kdeglobals <<'EOF'
+[General]
+ColorScheme=MasterFPSHarmony
+font=Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+menuFont=Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+toolBarFont=Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+smallestReadableFont=Inter,9,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+
+[Icons]
+Theme=Papirus
+
+[KDE]
+LookAndFeelPackage=org.masterfps.harmony
+widgetStyle=Breeze
+EOF
+cat > /etc/xdg/kwinrc <<'EOF'
+[Compositing]
+LatencyPolicy=PreferLowLatency
+AllowTearing=true
+
+[Plugins]
+blurEnabled=true
+EOF
+# Tela de login (SDDM) com a fênix e o nome MasterFPSOS
+T=/usr/share/sddm/themes/masterfpsos
+mkdir -p $T
+cp /usr/share/masterfps/fenix.svg $T/background.svg
+cat > $T/metadata.desktop <<'EOF'
+[SddmGreeterTheme]
+Name=MasterFPSOS
+Description=Tela de login do MasterFPSOS
+Author=MasterFPS
+Version=1.0
+Type=sddm-theme
+MainScript=Main.qml
+ConfigFile=theme.conf
+Theme-Id=masterfpsos
+Theme-API=2.0
+QtVersion=6
+EOF
+echo '[General]' > $T/theme.conf
+cat > $T/Main.qml <<'EOF'
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+
+Rectangle {
+    id: root
+    width: 1920
+    height: 1080
+    color: "#05060c"
+    property int sessionIndex: (sessionModel.lastIndex >= 0) ? sessionModel.lastIndex : 0
+
+    function doLogin() {
+        errorText.text = ""
+        sddm.login(userField.text, passField.text, root.sessionIndex)
+    }
+
+    Image {
+        anchors.fill: parent
+        source: "background.svg"
+        fillMode: Image.PreserveAspectCrop
+    }
+
+    Rectangle {
+        id: card
+        width: 400
+        height: 400
+        radius: 26
+        color: "#D9100B10"
+        border.color: "#66FF8A1E"
+        border.width: 1
+        x: Math.min(parent.width - width - 40, parent.width * 0.74 - width / 2)
+        anchors.verticalCenter: parent.verticalCenter
+
+        Column {
+            anchors.centerIn: parent
+            spacing: 14
+            width: parent.width - 64
+
+            Text {
+                text: "MasterFPSOS"
+                color: "#FFB020"
+                font.pixelSize: 34
+                font.bold: true
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+            Text {
+                id: clock
+                color: "#FFD9A0"
+                font.pixelSize: 15
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: Qt.formatDateTime(new Date(), "HH:mm  •  dd/MM/yyyy")
+                Timer {
+                    interval: 1000; running: true; repeat: true
+                    onTriggered: clock.text = Qt.formatDateTime(new Date(), "HH:mm  •  dd/MM/yyyy")
+                }
+            }
+            Item { width: 1; height: 6 }
+
+            TextField {
+                id: userField
+                width: parent.width
+                placeholderText: "Usuário"
+                text: userModel.lastUser
+                color: "white"
+                font.pixelSize: 16
+                background: Rectangle { radius: 12; color: "#33FFFFFF"; border.color: userField.activeFocus ? "#FF8A1E" : "#44FFFFFF" }
+                onAccepted: passField.forceActiveFocus()
+            }
+            TextField {
+                id: passField
+                width: parent.width
+                placeholderText: "Senha"
+                echoMode: TextInput.Password
+                color: "white"
+                font.pixelSize: 16
+                background: Rectangle { radius: 12; color: "#33FFFFFF"; border.color: passField.activeFocus ? "#FF8A1E" : "#44FFFFFF" }
+                onAccepted: root.doLogin()
+            }
+            Text {
+                id: errorText
+                color: "#FF6A4D"
+                font.pixelSize: 14
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: ""
+            }
+            Button {
+                width: parent.width
+                text: "Entrar"
+                font.pixelSize: 17
+                font.bold: true
+                contentItem: Text { text: parent.text; color: "#1A0A00"; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                background: Rectangle { radius: 12; color: parent.down ? "#E07000" : "#FF9A1A" }
+                onClicked: root.doLogin()
+            }
+            Row {
+                spacing: 12
+                anchors.horizontalCenter: parent.horizontalCenter
+                Button {
+                    text: "Reiniciar"
+                    onClicked: sddm.reboot()
+                }
+                Button {
+                    text: "Desligar"
+                    onClicked: sddm.powerOff()
+                }
+            }
+        }
+    }
+
+    Connections {
+        target: sddm
+        function onLoginFailed() {
+            errorText.text = "Usuário ou senha incorretos"
+            passField.text = ""
+            passField.forceActiveFocus()
+        }
+    }
+
+    Component.onCompleted: passField.forceActiveFocus()
+}
+EOF
+
+cat > /etc/xdg/kscreenlockerrc <<'EOF'
+[Greeter][Wallpaper][org.kde.image][General]
+Image=file:///usr/share/wallpapers/MasterFPSFenix
+EOF
+mkdir -p /etc/sddm.conf.d
+cat > /etc/sddm.conf.d/masterfps.conf <<'EOF'
+[General]
+Numlock=on
+
+[Theme]
+Current=masterfpsos
+EOF
+
+# ================================== OTIMIZAÇÃO DE CPU, GPU E LATÊNCIA
+say "Aplicando otimizações de CPU, GPU e latência..."
+cat > /etc/sysctl.d/99-masterfps.conf <<'EOF'
+vm.swappiness = 10
+vm.vfs_cache_pressure = 50
+vm.max_map_count = 2147483642
+vm.dirty_ratio = 10
+vm.dirty_background_ratio = 5
+kernel.sched_autogroup_enabled = 1
+kernel.split_lock_mitigate = 0
+kernel.nmi_watchdog = 0
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+net.ipv4.tcp_fastopen = 3
+net.ipv4.tcp_mtu_probing = 1
+net.core.netdev_max_backlog = 16384
+EOF
+cat > /etc/udev/rules.d/60-masterfps-io.rules <<'EOF'
+ACTION=="add|change", KERNEL=="nvme[0-9]*n[0-9]*", ATTR{queue/scheduler}="none"
+ACTION=="add|change", KERNEL=="sd[a-z]|mmcblk[0-9]*", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="mq-deadline"
+ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/rotational}=="1", ATTR{queue/scheduler}="bfq"
+EOF
+cat > /etc/security/limits.d/99-masterfps.conf <<'EOF'
+* hard nofile 1048576
+* soft nofile 1048576
+EOF
+mkdir -p /etc/systemd/zram-generator.conf.d
+cat > /etc/systemd/zram-generator.conf.d/masterfps.conf <<'EOF'
+[zram0]
+zram-size = ram / 2
+compression-algorithm = zstd
+EOF
+echo ntsync > /etc/modules-load.d/ntsync.conf
+cat > /etc/default/scx <<'EOF'
+SCX_SCHEDULER=scx_lavd
+SCX_FLAGS=''
+EOF
+cat > /etc/gamemode.ini <<'EOF'
+[general]
+renice=10
+ioprio=0
+softrealtime=auto
+desiredgov=performance
+igpu_desiredgov=performance
+
+[gpu]
+apply_gpu_optimisations=accept-responsibility
+gpu_device=0
+amd_performance_level=high
+EOF
+
+# Mouse/teclado USB com polling de 1 ms (menor input lag)
+cat > /etc/modprobe.d/masterfps-input.conf <<'EOF'
+options usbhid mousepoll=1 kbpoll=1 jspoll=1
+EOF
+
+# Variáveis de ambiente: cache de shaders grande + otimizações de driver
+mkdir -p /etc/environment.d
+cat > /etc/environment.d/90-masterfps.conf <<'EOF'
+mesa_glthread=true
+MESA_SHADER_CACHE_MAX_SIZE=12G
+__GL_THREADED_OPTIMIZATIONS=1
+__GL_SHADER_DISK_CACHE_SIZE=12884901888
+__GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1
+__GL_MaxFramesAllowed=1
+EOF
+
+case "$GPU_KIND" in
+  nvidia)
+    cat > /etc/modprobe.d/masterfps-nvidia.conf <<'EOF'
+options nvidia_drm modeset=1 fbdev=1
+options nvidia NVreg_UsePageAttributeTable=1 NVreg_PreserveVideoMemoryAllocations=1
+EOF
+    systemctl enable nvidia-persistenced.service nvidia-suspend.service nvidia-resume.service nvidia-hibernate.service 2>/dev/null
+    cat > /etc/xdg/autostart/masterfps-nvidia.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=MasterFPS - NVIDIA desempenho máximo
+Exec=sh -c 'nvidia-settings -a "[gpu:0]/GpuPowerMizerMode=1" >/dev/null 2>&1'
+OnlyShowIn=KDE;
+EOF
+    ;;
+  amd)
+    # libera os controles avançados de clock/energia da GPU AMD
+    cat > /etc/modprobe.d/masterfps-amd.conf <<'EOF'
+options amdgpu ppfeaturemask=0xffffffff
+EOF
+    ;;
+esac
+
+# ------------------------------------------------------------ MODO GAMER
+cat > /usr/local/bin/masterfps-lowlat <<'EOF'
+#!/bin/sh
+# Mantém a latência de despertar da CPU em 0 (evita estados de sono profundo)
+exec 3>/dev/cpu_dma_latency || exit 1
+echo 0 >&3
+exec sleep infinity
+EOF
+
+cat > /usr/local/bin/masterfps-boost <<'EOF'
+#!/usr/bin/env bash
+# masterfps-boost on|off|status — Modo Gamer: CPU e GPU em desempenho máximo
+STATE=/run/masterfps-boost.state
+[[ $EUID -eq 0 ]] || { echo "Use: sudo masterfps-boost on|off|status"; exit 1; }
+CPU=/sys/devices/system/cpu
+case "${1:-status}" in
+  on)
+    if [[ ! -f $STATE ]]; then
+      printf '%s\n%s\n' "$(cat $CPU/cpu0/cpufreq/scaling_governor 2>/dev/null)" \
+        "$(cat $CPU/cpu0/cpufreq/energy_performance_preference 2>/dev/null)" > $STATE
+    fi
+    [[ -w $CPU/cpufreq/boost ]] && echo 1 > $CPU/cpufreq/boost
+    [[ -w $CPU/intel_pstate/no_turbo ]] && echo 0 > $CPU/intel_pstate/no_turbo
+    for p in $CPU/cpu*/cpufreq; do
+      echo performance > "$p/scaling_governor" 2>/dev/null
+      [[ -w $p/energy_performance_preference ]] && echo performance > "$p/energy_performance_preference" 2>/dev/null
+      [[ -r $p/cpuinfo_max_freq && -w $p/scaling_min_freq ]] && cat "$p/cpuinfo_max_freq" > "$p/scaling_min_freq" 2>/dev/null
+    done
+    for d in /sys/class/drm/card?/device; do
+      [[ "$(cat $d/vendor 2>/dev/null)" == 0x1002 && -w $d/power_dpm_force_performance_level ]] \
+        && echo high > "$d/power_dpm_force_performance_level"
+    done
+    command -v nvidia-smi >/dev/null && nvidia-smi -pm 1 >/dev/null 2>&1
+    sysctl -q kernel.split_lock_mitigate=0 2>/dev/null
+    systemctl start masterfps-lowlat.service 2>/dev/null
+    echo "MODO GAMER: ATIVADO (CPU e GPU em desempenho máximo, latência mínima)" ;;
+  off)
+    gov=schedutil; epp=balance_performance
+    if [[ -f $STATE ]]; then gov=$(sed -n 1p $STATE); epp=$(sed -n 2p $STATE); fi
+    [[ "$gov" == performance || -z "$gov" ]] && gov=schedutil
+    systemctl stop masterfps-lowlat.service 2>/dev/null
+    for p in $CPU/cpu*/cpufreq; do
+      [[ -r $p/cpuinfo_min_freq && -w $p/scaling_min_freq ]] && cat "$p/cpuinfo_min_freq" > "$p/scaling_min_freq" 2>/dev/null
+      echo "$gov" > "$p/scaling_governor" 2>/dev/null || echo powersave > "$p/scaling_governor" 2>/dev/null
+      [[ -n "$epp" && -w $p/energy_performance_preference ]] && echo "$epp" > "$p/energy_performance_preference" 2>/dev/null
+    done
+    for d in /sys/class/drm/card?/device; do
+      [[ -w $d/power_dpm_force_performance_level ]] && echo auto > "$d/power_dpm_force_performance_level"
+    done
+    rm -f $STATE
+    echo "MODO GAMER: DESATIVADO (modo equilibrado / economia)" ;;
+  status)
+    echo "CPU governor   : $(cat $CPU/cpu0/cpufreq/scaling_governor 2>/dev/null)"
+    echo "CPU preferência: $(cat $CPU/cpu0/cpufreq/energy_performance_preference 2>/dev/null)"
+    echo "CPU freq mín   : $(cat $CPU/cpu0/cpufreq/scaling_min_freq 2>/dev/null) kHz"
+    echo "Latência baixa : $(systemctl is-active masterfps-lowlat.service 2>/dev/null)"
+    for d in /sys/class/drm/card?/device; do
+      [[ -r $d/power_dpm_force_performance_level ]] && echo "GPU AMD        : $(cat $d/power_dpm_force_performance_level)"
+    done
+    echo "Kernel         : $(uname -r)" ;;
+  *) echo "Uso: masterfps-boost on|off|status"; exit 1 ;;
+esac
+EOF
+
+cat > /etc/systemd/system/masterfps-lowlat.service <<'EOF'
+[Unit]
+Description=MasterFPS - Latência mínima da CPU
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/masterfps-lowlat
+EOF
+cat > /etc/systemd/system/masterfps-boost.service <<'EOF'
+[Unit]
+Description=MasterFPS - Modo Gamer (desempenho máximo)
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/masterfps-boost on
+ExecStop=/usr/local/bin/masterfps-boost off
+
+[Install]
+WantedBy=multi-user.target
+EOF
+echo '%wheel ALL=(root) NOPASSWD: /usr/local/bin/masterfps-boost' > /etc/sudoers.d/masterfps
+chmod 440 /etc/sudoers.d/masterfps
+visudo -cf /etc/sudoers.d/masterfps >/dev/null || rm -f /etc/sudoers.d/masterfps
+
+# ----------------------------------------------------- EXECUTAR .EXE / .MSI
+cat > /usr/local/bin/masterfps-run <<'EOF'
+#!/usr/bin/env bash
+# masterfps-run arquivo.exe [args] — executa programas e jogos do Windows
+# Usa umu-launcher (Proton-GE) quando disponível; senão, Wine.
+f="${1:-}"
+[[ -n "$f" ]] || { echo "Uso: masterfps-run arquivo.exe [argumentos]"; exit 1; }
+shift
+f=$(readlink -f -- "$f")
+cd "$(dirname "$f")" || exit 1
+
+export WINEPREFIX="${WINEPREFIX:-$HOME/.masterfps/prefix}"
+export WINEDEBUG=-all DXVK_LOG_LEVEL=none VKD3D_DEBUG=none
+export PROTON_USE_NTSYNC=1 WINEESYNC=1 WINEFSYNC=1
+export mesa_glthread=true __GL_THREADED_OPTIMIZATIONS=1
+mkdir -p "$WINEPREFIX"
+
+RUN=()
+command -v gamemoderun >/dev/null && RUN+=(gamemoderun)
+[[ "${MASTERFPS_HUD:-0}" == 1 ]] && command -v mangohud >/dev/null && RUN+=(mangohud)
+
+case "${f,,}" in
+  *.msi)         CMD=(msiexec /i "$f" "$@") ;;
+  *.bat|*.cmd)   CMD=(cmd /c "$f" "$@") ;;
+  *)             CMD=("$f" "$@") ;;
+esac
+
+if command -v umu-run >/dev/null; then
+  export GAMEID="${GAMEID:-umu-default}" PROTONPATH="${PROTONPATH:-GE-Proton}"
+  exec "${RUN[@]}" umu-run "${CMD[@]}"
+else
+  exec "${RUN[@]}" wine "${CMD[@]}"
+fi
+EOF
+
+cat > /usr/share/applications/masterfps-exe.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Executar programa do Windows (MasterFPS)
+Name[pt_BR]=Executar programa do Windows (MasterFPS)
+Comment[pt_BR]=Abre .exe e .msi com Proton-GE ou Wine
+Exec=/usr/local/bin/masterfps-run %f
+MimeType=application/x-ms-dos-executable;application/vnd.microsoft.portable-executable;application/x-msdownload;application/x-msi;application/x-dosexec;
+Icon=wine
+Terminal=false
+NoDisplay=true
+Categories=Game;
+EOF
+cat > /usr/share/applications/masterfps-boost-on.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=MasterFPS - Modo Gamer LIGADO
+Exec=sh -c 'sudo -n /usr/local/bin/masterfps-boost on; echo; read -p "Pressione Enter para fechar"'
+Icon=utilities-system-monitor
+Terminal=true
+Categories=Game;System;
+EOF
+cat > /usr/share/applications/masterfps-boost-off.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=MasterFPS - Modo Gamer DESLIGADO
+Exec=sh -c 'sudo -n /usr/local/bin/masterfps-boost off; echo; read -p "Pressione Enter para fechar"'
+Icon=utilities-system-monitor
+Terminal=true
+Categories=Game;System;
+EOF
+cat > /etc/xdg/mimeapps.list <<'EOF'
+[Default Applications]
+application/x-ms-dos-executable=masterfps-exe.desktop
+application/vnd.microsoft.portable-executable=masterfps-exe.desktop
+application/x-msdownload=masterfps-exe.desktop
+application/x-dosexec=masterfps-exe.desktop
+application/x-msi=masterfps-exe.desktop
+EOF
+echo ':DOSWin:M::MZ::/usr/local/bin/masterfps-run:' > /etc/binfmt.d/masterfps-exe.conf
+
+cat > /usr/local/bin/masterfps-apps <<'EOF'
+#!/usr/bin/env bash
+# Instala Bottles, ProtonUp-Qt e Heroic (Epic/GOG) via Flatpak (usuário)
+flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpak install --user -y flathub com.usebottles.bottles net.davidotek.pupgui2 com.heroicgameslauncher.hgl
+EOF
+chmod +x /usr/local/bin/masterfps-{boost,run,apps,lowlat}
+update-desktop-database /usr/share/applications 2>/dev/null
+
+# ================================================== IDENTIDADE: MasterFPSOS
+say "Aplicando a identidade MasterFPSOS (os-release, hostname, login)..."
+cat > /usr/lib/os-release <<'EOF'
+NAME="MasterFPSOS"
+PRETTY_NAME="MasterFPSOS"
+ID=masterfpsos
+ID_LIKE=arch
+BUILD_ID=rolling
+ANSI_COLOR="38;2;255;138;30"
+HOME_URL="https://github.com/OpenGamingCollective"
+EOF
+cat > /etc/lsb-release <<'EOF'
+DISTRIB_ID="MasterFPSOS"
+DISTRIB_RELEASE="rolling"
+DISTRIB_DESCRIPTION="MasterFPSOS"
+EOF
+printf 'MasterFPSOS \\r (\\l)\n\n' > /etc/issue
+grep -q '^NoUpgrade.*os-release' /etc/pacman.conf || \
+  sed -i '/^\[options\]/a NoUpgrade = usr/lib/os-release etc/lsb-release etc/issue' /etc/pacman.conf
+echo masterfpsos > /etc/hostname
+grep -q masterfpsos /etc/hosts 2>/dev/null || echo '127.0.1.1 masterfpsos.localdomain masterfpsos' >> /etc/hosts
+
+# ================================================================ SERVIÇOS
+systemctl enable sddm NetworkManager masterfps-boost.service fstrim.timer earlyoom.service 2>/dev/null
+systemctl enable scx.service 2>/dev/null || warn "scx.service indisponível (normal se o kernel não tiver sched_ext)"
+
+# =============================================================== BOOTLOADER
+PARAMS="nowatchdog threadirqs preempt=full"
+if command -v grub-mkconfig >/dev/null 2>&1 && [[ -f /etc/default/grub ]]; then
+  say "Ajustando o GRUB (nome MasterFPSOS + fênix)..."
+  setg() { if grep -q "^$1=" /etc/default/grub; then sed -i "s|^$1=.*|$1=$2|" /etc/default/grub; else echo "$1=$2" >> /etc/default/grub; fi; }
+  grep -q nowatchdog /etc/default/grub || \
+    sed -i "s/^\(GRUB_CMDLINE_LINUX_DEFAULT=\"[^\"]*\)\"/\1 $PARAMS\"/" /etc/default/grub
+  setg GRUB_DISTRIBUTOR '"MasterFPSOS"'
+  setg GRUB_GFXMODE auto
+  setg GRUB_GFXPAYLOAD_LINUX keep
+  setg GRUB_COLOR_NORMAL '"light-gray/black"'
+  setg GRUB_COLOR_HIGHLIGHT '"black/yellow"'
+  if command -v rsvg-convert >/dev/null 2>&1 && \
+     rsvg-convert -w 1920 -h 1080 /usr/share/masterfps/fenix.svg -o /boot/grub/masterfpsos.png; then
+    setg GRUB_BACKGROUND '"/boot/grub/masterfpsos.png"'
+  else
+    warn "Não consegui gerar o fundo do GRUB (rsvg-convert)."
+  fi
+  if [[ -t 0 ]]; then
+    read -rp "Desativar as mitigações de CPU (mitigations=off)? Mais FPS, MENOS segurança. [s/N] " r
+    if [[ "${r,,}" == s ]]; then
+      grep -q 'mitigations=off' /etc/default/grub || \
+        sed -i 's/^\(GRUB_CMDLINE_LINUX_DEFAULT="[^"]*\)"/\1 mitigations=off"/' /etc/default/grub
+    fi
+  fi
+  grub-mkconfig -o /boot/grub/grub.cfg
+elif [[ -d /boot/loader/entries ]]; then
+  say "Criando entradas do systemd-boot (MasterFPSOS)..."
+  for f in /boot/loader/entries/*linux.conf; do
+    [[ -f "$f" ]] || continue
+    sed -e 's/vmlinuz-linux/vmlinuz-linux-ogc/' \
+        -e 's/initramfs-linux\.img/initramfs-linux-ogc.img/' \
+        -e 's/^title.*/title MasterFPSOS/' \
+        -e "/^options/ s/\$/ $PARAMS/" "$f" > "${f%linux.conf}linux-ogc.conf"
+    sed -i 's/^title.*/title MasterFPSOS (kernel padrão)/' "$f"
+  done
+  for f in /boot/loader/entries/*fallback.conf; do
+    [[ -f "$f" ]] && sed -i 's/^title.*/title MasterFPSOS (recuperação)/' "$f"
+  done
+  grep -q '^default' /boot/loader/loader.conf \
+    && sed -i 's/^default.*/default *ogc*/' /boot/loader/loader.conf \
+    || echo 'default *ogc*' >> /boot/loader/loader.conf
+else
+  warn "Bootloader não detectado: aponte-o para /boot/vmlinuz-linux-ogc manualmente."
+fi
+
+mkinitcpio -P 2>/dev/null
+
+say "PRONTO! Reinicie o computador."
+echo "  - Confira o kernel:    uname -r   (deve conter 'ogc')"
+echo "  - Abrir .exe:          dois cliques no arquivo, ou:  masterfps-run jogo.exe"
+echo "  - Modo Gamer:          sudo masterfps-boost on|off|status"
+echo "  - Apps extras:         masterfps-apps   (Bottles, ProtonUp-Qt, Heroic)"
+echo "  - Opções da Steam:     gamemoderun mangohud %command%"

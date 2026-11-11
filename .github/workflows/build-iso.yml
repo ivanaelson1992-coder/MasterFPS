@@ -1,0 +1,29 @@
+name: Gerar ISO MasterFPSOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Baixar o projeto
+        uses: actions/checkout@v4
+
+      - name: Liberar espaço em disco
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+          df -h /
+
+      - name: Gerar a ISO dentro de um Arch Linux
+        run: |
+          docker run --rm --privileged -v "$PWD":/work archlinux:latest \
+            bash -c "pacman -Syu --noconfirm && cd /work && chmod +x build.sh && ./build.sh"
+
+      - name: Enviar a ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: MasterFPSOS-ISO
+          path: out/*.iso
+          if-no-files-found: error
